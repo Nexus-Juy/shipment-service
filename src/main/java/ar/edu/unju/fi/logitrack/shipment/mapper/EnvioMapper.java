@@ -17,7 +17,7 @@ public class EnvioMapper {
             envio.getCodigoSeguimiento(),
             envio.getEstado(),
             envio.getCliente().getId(),
-            envio.getRepartidor() != null ? envio.getRepartidor().getId() : null,
+            envio.getRepartidorId(),
             toDireccionResponse(envio.getOrigen()),
             toDireccionResponse(envio.getDestino()),
             envio.getPesoKg(),

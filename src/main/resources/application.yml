@@ -33,6 +33,12 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
 
+# URL del microservicio de repartidores. En Docker se sobreescribe con
+# COURIER_SERVICE_URL=http://courier-service:8082.
+courier:
+  service:
+    url: ${COURIER_SERVICE_URL:http://localhost:8082}
+
 management:
   endpoints:
     web:

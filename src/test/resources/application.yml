@@ -15,3 +15,8 @@ spring:
       hibernate:
         type:
           preferred_uuid_jdbc_type: CHAR
+
+# URL de courier-service para los tests de contexto (los unitarios usan mocks).
+courier:
+  service:
+    url: http://localhost:8082

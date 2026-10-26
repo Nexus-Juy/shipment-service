@@ -1,19 +1,25 @@
 package ar.edu.unju.fi.logitrack.shipment.integration;
 
+import ar.edu.unju.fi.logitrack.shipment.TestDataFactory;
+import ar.edu.unju.fi.logitrack.shipment.client.CourierClient;
+import ar.edu.unju.fi.logitrack.shipment.dto.courier.DisponibilidadResponse;
 import ar.edu.unju.fi.logitrack.shipment.repository.ClienteRepository;
 import ar.edu.unju.fi.logitrack.shipment.repository.EnvioRepository;
-import ar.edu.unju.fi.logitrack.shipment.repository.RepartidorRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.UUID;
+
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,6 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Integración de punta a punta del ciclo de vida de un envío:
  * controller + service + repository + H2 en memoria.
+ * <p>
+ * courier-service se reemplaza por un mock: shipment ya no tiene la entidad Repartidor y su
+ * disponibilidad se consulta por REST.
+ * </p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,16 +59,22 @@ class GestionEnviosIntegrationTest {
     private EnvioRepository envioRepository;
 
     @Autowired
-    private RepartidorRepository repartidorRepository;
-
-    @Autowired
     private ClienteRepository clienteRepository;
+
+    @MockitoBean
+    private CourierClient courierClient;
+
+    private final UUID repartidorId = TestDataFactory.REPARTIDOR_ID;
 
     @BeforeEach
     void limpiarBase() {
         envioRepository.deleteAll();
-        repartidorRepository.deleteAll();
         clienteRepository.deleteAll();
+    }
+
+    private void repartidorDisponible(boolean disponible) {
+        given(courierClient.consultarDisponibilidad(repartidorId))
+                .willReturn(new DisponibilidadResponse(repartidorId, disponible ? "ACTIVO" : "INACTIVO", disponible));
     }
 
     @Test
@@ -81,20 +97,14 @@ class GestionEnviosIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"estado\": \"EN_RUTA\"}"))
             .andExpect(status().isUnprocessableEntity());
 
-        String repartidor = mockMvc.perform(post("/api/v1/repartidores")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                    {"nombre": "Lucía Fernández", "tipoVehiculo": "MOTO",
-                     "email": "lucia.fernandez@logitrack.test", "telefono": "+54 388 400-2000"}
-                    """))
-            .andExpect(status().isCreated())
-            .andReturn().getResponse().getContentAsString();
-        String repartidorId = JsonPath.read(repartidor, "$.id");
+        // courier-service confirma que el repartidor está ACTIVO
+        repartidorDisponible(true);
 
         mockMvc.perform(put(ENVIOS + "/{id}/repartidor", envioId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"repartidorId\": \"%s\"}".formatted(repartidorId)))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.repartidorId").value(repartidorId.toString()));
 
         mockMvc.perform(patch(ENVIOS + "/{id}/estado", envioId)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"estado\": \"EN_RUTA\"}"))
@@ -111,16 +121,38 @@ class GestionEnviosIntegrationTest {
             .andExpect(jsonPath("$.estado").value("ENTREGADO"));
 
         // La hoja de ruta del repartidor muestra el envío entregado
-        mockMvc.perform(get(ENVIOS).param("repartidorId", repartidorId).param("estado", "ENTREGADO"))
+        mockMvc.perform(get(ENVIOS).param("repartidorId", repartidorId.toString()).param("estado", "ENTREGADO"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(1)))
-            .andExpect(jsonPath("$[0].id").value(envioId));
+            .andExpect(jsonPath("$[0].id").value(envioId))
+            .andExpect(jsonPath("$[0].repartidorId").value(repartidorId.toString()));
 
         mockMvc.perform(get(ENVIOS + "/{id}/historial", envioId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(3)))
             .andExpect(jsonPath("$[0].estadoNuevo").value("ENTREGADO"))
             .andExpect(jsonPath("$[2].estadoNuevo").value("PENDIENTE"));
+    }
+
+    @Test
+    @DisplayName("No asigna un repartidor que courier-service informa como INACTIVO")
+    void noAsignaRepartidorInactivo() throws Exception {
+        String respuesta = mockMvc.perform(post(ENVIOS).contentType(MediaType.APPLICATION_JSON).content(BODY_ENVIO))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        String envioId = JsonPath.read(respuesta, "$.id");
+
+        repartidorDisponible(false);
+
+        mockMvc.perform(put(ENVIOS + "/{id}/repartidor", envioId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"repartidorId\": \"%s\"}".formatted(repartidorId)))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.status").value(422));
+
+        mockMvc.perform(get(ENVIOS + "/{id}", envioId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.repartidorId").doesNotExist());
     }
 
     @Test

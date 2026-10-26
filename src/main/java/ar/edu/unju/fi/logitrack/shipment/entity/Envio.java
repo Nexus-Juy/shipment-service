@@ -28,6 +28,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -54,9 +55,12 @@ public class Envio extends BaseEntity {
     @JoinColumn(name = "cliente_id", nullable = false)
     private Cliente cliente;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "repartidor_id")
-    private Repartidor repartidor;
+    /**
+     * Id del repartidor asignado. Es una referencia simple, sin relación JPA ni FK: el repartidor
+     * vive en courier-service y este microservicio solo guarda su identificador.
+     */
+    @Column(name = "repartidor_id")
+    private UUID repartidorId;
 
     @Embedded
     @AttributeOverrides({
@@ -151,22 +155,31 @@ public class Envio extends BaseEntity {
         cambiarEstado(EstadoEnvio.CANCELADO);
     }
 
-    public void asignarRepartidor(@NonNull Repartidor nuevoRepartidor) {
+    /**
+     * Valida que el envío admita la asignación de un repartidor. Se expone aparte para que el
+     * servicio rechace la operación antes de consultar courier-service por la disponibilidad.
+     */
+    public void validarAsignacionPosible() {
         if (estado != EstadoEnvio.PENDIENTE) {
             throw new BusinessRuleException(
                 "Solo se puede asignar repartidor a envíos PENDIENTES (estado actual: %s).".formatted(estado));
         }
-        if (!nuevoRepartidor.estaActivo()) {
-            throw new BusinessRuleException("El repartidor %s no está ACTIVO.".formatted(nuevoRepartidor.getNombre()));
-        }
-        this.repartidor = nuevoRepartidor;
+    }
+
+    /**
+     * Asigna un repartidor por su identificador. El estado del repartidor lo valida
+     * {@code AsignacionServiceImpl} contra courier-service antes de llamar a este método.
+     */
+    public void asignarRepartidor(@NonNull UUID nuevoRepartidorId) {
+        validarAsignacionPosible();
+        this.repartidorId = nuevoRepartidorId;
     }
 
     public void cambiarEstado(@NonNull EstadoEnvio nuevoEstado) {
         if (!estado.puedeTransicionarA(nuevoEstado)) {
             throw new InvalidStateTransitionException(estado, nuevoEstado);
         }
-        if (nuevoEstado == EstadoEnvio.EN_RUTA && repartidor == null) {
+        if (nuevoEstado == EstadoEnvio.EN_RUTA && repartidorId == null) {
             throw new BusinessRuleException("No se puede despachar el envío sin un repartidor asignado.");
         }
         EstadoEnvio anterior = this.estado;

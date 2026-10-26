@@ -1,7 +1,7 @@
 package ar.edu.unju.fi.logitrack.shipment.controller;
 
-import ar.edu.unju.fi.logitrack.shipment.dto.repartidor.AsignacionRequest;
-import ar.edu.unju.fi.logitrack.shipment.dto.repartidor.AsignacionResponse;
+import ar.edu.unju.fi.logitrack.shipment.dto.asignacion.AsignacionRequest;
+import ar.edu.unju.fi.logitrack.shipment.dto.asignacion.AsignacionResponse;
 import ar.edu.unju.fi.logitrack.shipment.service.AsignacionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -20,6 +20,10 @@ import java.util.UUID;
 /**
  * Asignación de repartidor a un envío. El repartidor es un sub-recurso del envío:
  * PUT /api/v1/envios/{envioId}/repartidor
+ * <p>
+ * La existencia y el estado del repartidor se consultan a courier-service por REST; esta
+ * base de datos solo guarda su identificador.
+ * </p>
  */
 @RestController
 @RequestMapping("/api/v1/envios/{envioId}/repartidor")
@@ -37,6 +41,7 @@ public class AsignacionController {
     @ApiResponse(responseCode = "404", description = "No existe el envío o el repartidor")
     @ApiResponse(responseCode = "409", description = "Conflicto de concurrencia al asignar")
     @ApiResponse(responseCode = "422", description = "Envío no PENDIENTE o repartidor INACTIVO")
+    @ApiResponse(responseCode = "503", description = "courier-service no está disponible")
     public ResponseEntity<AsignacionResponse> asignar(
             @PathVariable UUID envioId,
             @Valid @RequestBody AsignacionRequest request) {
