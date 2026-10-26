@@ -5,6 +5,12 @@ spring:
   application:
     name: shipment-service
 
+  http:
+    client:
+      # Sin timeouts, un courier-service colgado bloquearía los hilos de shipment-service.
+      connect-timeout: 2s
+      read-timeout: 5s
+
   datasource:
     # Por defecto apunta al MySQL de docker-compose expuesto en el puerto 3307 de tu máquina.
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:logitrack_shipments}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC

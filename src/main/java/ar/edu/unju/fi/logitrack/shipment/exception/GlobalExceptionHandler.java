@@ -41,14 +41,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Maneja datos únicos que ya existen, como el email de un repartidor (HTTP 409).
-     */
-    @ExceptionHandler(DuplicateResourceException.class)
-    public ResponseEntity<ProblemDetail> handleDuplicate(DuplicateResourceException ex) {
-        return build(HttpStatus.CONFLICT, "Recurso duplicado", ex.getMessage());
-    }
-
-    /**
      * Maneja errores de restricciones de la base de datos como claves duplicadas (HTTP 409).
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
