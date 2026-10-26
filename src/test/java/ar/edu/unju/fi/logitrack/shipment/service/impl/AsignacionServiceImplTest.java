@@ -1,18 +1,16 @@
 package ar.edu.unju.fi.logitrack.shipment.service.impl;
 
 import ar.edu.unju.fi.logitrack.shipment.TestDataFactory;
-import ar.edu.unju.fi.logitrack.shipment.dto.repartidor.AsignacionResponse;
+import ar.edu.unju.fi.logitrack.shipment.client.CourierClient;
+import ar.edu.unju.fi.logitrack.shipment.dto.asignacion.AsignacionResponse;
+import ar.edu.unju.fi.logitrack.shipment.dto.courier.DisponibilidadResponse;
 import ar.edu.unju.fi.logitrack.shipment.entity.Cliente;
 import ar.edu.unju.fi.logitrack.shipment.entity.Envio;
-import ar.edu.unju.fi.logitrack.shipment.entity.Repartidor;
 import ar.edu.unju.fi.logitrack.shipment.entity.enums.EstadoEnvio;
-import ar.edu.unju.fi.logitrack.shipment.entity.enums.TipoVehiculo;
 import ar.edu.unju.fi.logitrack.shipment.exception.BusinessRuleException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import ar.edu.unju.fi.logitrack.shipment.mapper.AsignacionMapper;
-import ar.edu.unju.fi.logitrack.shipment.mapper.RepartidorMapper;
 import ar.edu.unju.fi.logitrack.shipment.repository.EnvioRepository;
-import ar.edu.unju.fi.logitrack.shipment.repository.RepartidorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +31,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Tests unitarios de la asignación de repartidores: cubren todas las reglas de negocio. */
+/**
+ * Tests unitarios de la asignación: reglas del envío y consulta remota de disponibilidad
+ * a courier-service (mockeada).
+ */
 @ExtendWith(MockitoExtension.class)
 class AsignacionServiceImplTest {
 
@@ -41,25 +42,24 @@ class AsignacionServiceImplTest {
     private EnvioRepository envioRepository;
 
     @Mock
-    private RepartidorRepository repartidorRepository;
+    private CourierClient courierClient;
 
     private AsignacionServiceImpl service;
 
     private final UUID envioId = UUID.randomUUID();
-    private final UUID repartidorId = UUID.randomUUID();
+    private final UUID repartidorId = TestDataFactory.REPARTIDOR_ID;
     private Cliente cliente;
 
     @BeforeEach
     void setUp() {
-        service = new AsignacionServiceImpl(
-                envioRepository, repartidorRepository, new AsignacionMapper(new RepartidorMapper()));
+        service = new AsignacionServiceImpl(envioRepository, courierClient, new AsignacionMapper());
         cliente = TestDataFactory.cliente();
     }
 
     private Envio crearEnvio(EstadoEnvio estado) {
         Envio envio = TestDataFactory.envioPendiente("LT-TEST-001", cliente);
         if (estado != EstadoEnvio.PENDIENTE) {
-            envio.asignarRepartidor(TestDataFactory.repartidorActivo());
+            envio.asignarRepartidor(repartidorId);
             if (estado == EstadoEnvio.CANCELADO) {
                 envio.cancelar();
             } else if (estado == EstadoEnvio.EN_RUTA) {
@@ -73,34 +73,25 @@ class AsignacionServiceImplTest {
         return envio;
     }
 
-    private Repartidor crearRepartidorActivo() {
-        Repartidor repartidor = TestDataFactory.repartidorActivo();
-        ReflectionTestUtils.setField(repartidor, "id", repartidorId);
-        return repartidor;
-    }
-
-    private Repartidor crearRepartidorInactivo() {
-        Repartidor repartidor = TestDataFactory.repartidorInactivo();
-        ReflectionTestUtils.setField(repartidor, "id", repartidorId);
-        return repartidor;
+    private DisponibilidadResponse disponibilidad(boolean disponible, String estado) {
+        return new DisponibilidadResponse(repartidorId, estado, disponible);
     }
 
     @Test
     @DisplayName("asigna un repartidor ACTIVO a un envío PENDIENTE")
     void asignaRepartidorActivoAEnvioPendiente() {
         Envio envio = crearEnvio(EstadoEnvio.PENDIENTE);
-        Repartidor repartidor = crearRepartidorActivo();
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envio));
-        when(repartidorRepository.findById(repartidorId)).thenReturn(Optional.of(repartidor));
+        when(courierClient.consultarDisponibilidad(repartidorId)).thenReturn(disponibilidad(true, "ACTIVO"));
         when(envioRepository.save(any(Envio.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AsignacionResponse respuesta = service.asignarRepartidor(envioId, repartidorId);
 
-        assertThat(envio.getRepartidor()).isSameAs(repartidor);
+        assertThat(envio.getRepartidorId()).isEqualTo(repartidorId);
         assertThat(respuesta.envioId()).isEqualTo(envioId);
         assertThat(respuesta.codigoSeguimiento()).isEqualTo("LT-TEST-001");
         assertThat(respuesta.estadoEnvio()).isEqualTo(EstadoEnvio.PENDIENTE);
-        assertThat(respuesta.repartidor().id()).isEqualTo(repartidorId);
+        assertThat(respuesta.repartidorId()).isEqualTo(repartidorId);
         verify(envioRepository).save(envio);
     }
 
@@ -108,32 +99,28 @@ class AsignacionServiceImplTest {
     @DisplayName("permite reasignar el envío a otro repartidor mientras siga PENDIENTE")
     void reasignaEnvioPendienteAOtroRepartidor() {
         Envio envio = crearEnvio(EstadoEnvio.PENDIENTE);
-        Repartidor repartidorAnterior = new Repartidor("Anterior", TipoVehiculo.AUTO, "anterior@logitrack.test", "+54 388 400-3000");
-        envio.asignarRepartidor(repartidorAnterior);
-
-        Repartidor nuevo = crearRepartidorActivo();
+        envio.asignarRepartidor(UUID.randomUUID());
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envio));
-        when(repartidorRepository.findById(repartidorId)).thenReturn(Optional.of(nuevo));
+        when(courierClient.consultarDisponibilidad(repartidorId)).thenReturn(disponibilidad(true, "ACTIVO"));
         when(envioRepository.save(any(Envio.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.asignarRepartidor(envioId, repartidorId);
 
-        assertThat(envio.getRepartidor()).isSameAs(nuevo);
+        assertThat(envio.getRepartidorId()).isEqualTo(repartidorId);
     }
 
     @Test
-    @DisplayName("rechaza asignar un repartidor INACTIVO")
+    @DisplayName("rechaza asignar un repartidor INACTIVO, según lo que informa courier-service")
     void rechazaRepartidorInactivo() {
         Envio envio = crearEnvio(EstadoEnvio.PENDIENTE);
-        Repartidor repartidor = crearRepartidorInactivo();
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envio));
-        when(repartidorRepository.findById(repartidorId)).thenReturn(Optional.of(repartidor));
+        when(courierClient.consultarDisponibilidad(repartidorId)).thenReturn(disponibilidad(false, "INACTIVO"));
 
         assertThatThrownBy(() -> service.asignarRepartidor(envioId, repartidorId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("no está ACTIVO");
 
-        assertThat(envio.getRepartidor()).isNull();
+        assertThat(envio.getRepartidorId()).isNull();
         verify(envioRepository, never()).save(any());
     }
 
@@ -141,14 +128,14 @@ class AsignacionServiceImplTest {
     @EnumSource(value = EstadoEnvio.class, names = "PENDIENTE", mode = EnumSource.Mode.EXCLUDE)
     void rechazaEnvioQueNoEstaPendiente(EstadoEnvio estado) {
         Envio envio = crearEnvio(estado);
-        Repartidor repartidor = crearRepartidorActivo();
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envio));
-        when(repartidorRepository.findById(repartidorId)).thenReturn(Optional.of(repartidor));
 
         assertThatThrownBy(() -> service.asignarRepartidor(envioId, repartidorId))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("Solo se puede asignar repartidor a envíos PENDIENTES");
 
+        // No se consulta courier-service si el envío no puede recibir un repartidor.
+        verify(courierClient, never()).consultarDisponibilidad(any());
         verify(envioRepository, never()).save(any());
     }
 
@@ -161,20 +148,22 @@ class AsignacionServiceImplTest {
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining(envioId.toString());
 
-        verify(repartidorRepository, never()).findById(any());
+        verify(courierClient, never()).consultarDisponibilidad(any());
     }
 
     @Test
-    @DisplayName("lanza 404 si el repartidor no existe")
+    @DisplayName("propaga el 404 cuando courier-service no conoce al repartidor")
     void repartidorInexistente() {
         Envio envio = crearEnvio(EstadoEnvio.PENDIENTE);
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envio));
-        when(repartidorRepository.findById(repartidorId)).thenReturn(Optional.empty());
+        when(courierClient.consultarDisponibilidad(repartidorId))
+                .thenThrow(ResourceNotFoundException.of("Repartidor", repartidorId));
 
         assertThatThrownBy(() -> service.asignarRepartidor(envioId, repartidorId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining(repartidorId.toString());
 
+        assertThat(envio.getRepartidorId()).isNull();
         verify(envioRepository, never()).save(any());
     }
 }

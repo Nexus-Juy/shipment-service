@@ -66,6 +66,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Maneja la caída o el error de courier-service al consultar un repartidor (HTTP 503).
+     */
+    @ExceptionHandler(CourierServiceUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleCourierUnavailable(CourierServiceUnavailableException ex) {
+        log.warn("courier-service no disponible: {}", ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "Servicio no disponible",
+            "No se pudo consultar el microservicio de repartidores. Intente nuevamente más tarde.");
+    }
+
+    /**
      * Captura errores de validación de DTOs (@Valid) devolviendo el detalle por campo (HTTP 400).
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)

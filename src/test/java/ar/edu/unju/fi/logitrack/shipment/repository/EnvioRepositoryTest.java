@@ -5,7 +5,6 @@ import ar.edu.unju.fi.logitrack.shipment.config.JpaAuditingConfig;
 import ar.edu.unju.fi.logitrack.shipment.entity.Cliente;
 import ar.edu.unju.fi.logitrack.shipment.entity.Envio;
 import ar.edu.unju.fi.logitrack.shipment.entity.HistorialEstado;
-import ar.edu.unju.fi.logitrack.shipment.entity.Repartidor;
 import ar.edu.unju.fi.logitrack.shipment.entity.enums.EstadoEnvio;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,9 +50,8 @@ class EnvioRepositoryTest {
     @Test
     void cadaCambioDeEstadoQuedaPersistidoEnElHistorial() {
         Cliente cliente = entityManager.persist(TestDataFactory.cliente());
-        Repartidor repartidor = entityManager.persist(TestDataFactory.repartidorActivo());
         Envio envio = TestDataFactory.envioPendiente("LT-REPO000002", cliente);
-        envio.asignarRepartidor(repartidor);
+        envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID);
         envio.cambiarEstado(EstadoEnvio.EN_RUTA);
         Envio guardado = envioRepository.saveAndFlush(envio);
         entityManager.clear();
@@ -83,14 +81,13 @@ class EnvioRepositoryTest {
     @Test
     void existsByRepartidorIdAndEstado_devuelveTrueSoloSiCoincideRepartidorYEstado() {
         Cliente cliente = entityManager.persist(TestDataFactory.cliente());
-        Repartidor repartidor = entityManager.persist(TestDataFactory.repartidorActivo());
         Envio envio = TestDataFactory.envioPendiente("LT-REPO000005", cliente);
-        envio.asignarRepartidor(repartidor);
+        envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID);
         envio.cambiarEstado(EstadoEnvio.EN_RUTA);
         envioRepository.saveAndFlush(envio);
 
-        assertThat(envioRepository.existsByRepartidorIdAndEstado(repartidor.getId(), EstadoEnvio.EN_RUTA)).isTrue();
-        assertThat(envioRepository.existsByRepartidorIdAndEstado(repartidor.getId(), EstadoEnvio.PENDIENTE)).isFalse();
+        assertThat(envioRepository.existsByRepartidorIdAndEstado(TestDataFactory.REPARTIDOR_ID, EstadoEnvio.EN_RUTA)).isTrue();
+        assertThat(envioRepository.existsByRepartidorIdAndEstado(TestDataFactory.REPARTIDOR_ID, EstadoEnvio.PENDIENTE)).isFalse();
         assertThat(envioRepository.existsByRepartidorIdAndEstado(UUID.randomUUID(), EstadoEnvio.EN_RUTA)).isFalse();
     }
 }

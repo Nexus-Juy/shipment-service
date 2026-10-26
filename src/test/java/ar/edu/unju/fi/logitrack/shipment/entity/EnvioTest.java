@@ -48,7 +48,7 @@ class EnvioTest {
         @Test
         void flujoCompletoQuedaAuditadoEnElHistorial() {
             Envio envio = envioPendiente("LT-F1", cliente());
-            envio.asignarRepartidor(TestDataFactory.repartidorActivo());
+            envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID);
 
             envio.cambiarEstado(EstadoEnvio.EN_RUTA);
             envio.cambiarEstado(EstadoEnvio.ENTREGADO);
@@ -85,7 +85,7 @@ class EnvioTest {
         @Test
         void unEnvioEntregadoNoPuedeVolverAtras() {
             Envio envio = envioPendiente("LT-F4", cliente());
-            envio.asignarRepartidor(TestDataFactory.repartidorActivo());
+            envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID);
             envio.cambiarEstado(EstadoEnvio.EN_RUTA);
             envio.cambiarEstado(EstadoEnvio.ENTREGADO);
 
@@ -111,7 +111,7 @@ class EnvioTest {
         @Test
         void noSeCancelaSiYaEstaEnRuta() {
             Envio envio = envioPendiente("LT-C2", cliente());
-            envio.asignarRepartidor(TestDataFactory.repartidorActivo());
+            envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID);
             envio.cambiarEstado(EstadoEnvio.EN_RUTA);
 
             assertThat(envio.puedeCancelarse()).isFalse();
@@ -124,13 +124,12 @@ class EnvioTest {
     class AsignacionDeRepartidor {
 
         @Test
-        void rechazaRepartidorInactivo() {
+        void asignaElIdentificadorDelRepartidor() {
             Envio envio = envioPendiente("LT-A1", cliente());
 
-            assertThatThrownBy(() -> envio.asignarRepartidor(TestDataFactory.repartidorInactivo()))
-                    .isInstanceOf(BusinessRuleException.class)
-                    .hasMessageContaining("ACTIVO");
-            assertThat(envio.getRepartidor()).isNull();
+            envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID);
+
+            assertThat(envio.getRepartidorId()).isEqualTo(TestDataFactory.REPARTIDOR_ID);
         }
 
         @Test
@@ -138,7 +137,7 @@ class EnvioTest {
             Envio envio = envioPendiente("LT-A2", cliente());
             envio.cancelar();
 
-            assertThatThrownBy(() -> envio.asignarRepartidor(TestDataFactory.repartidorActivo()))
+            assertThatThrownBy(() -> envio.asignarRepartidor(TestDataFactory.REPARTIDOR_ID))
                     .isInstanceOf(BusinessRuleException.class);
         }
     }

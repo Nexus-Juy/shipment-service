@@ -13,6 +13,6 @@ public class OpenApiConfig {
         return new OpenAPI().info(new Info()
                 .title("LogiTrack - shipment-service")
                 .version("v1")
-                .description("API del ciclo de vida de envíos, historial de estados y gestión de repartidores."));
+                .description("API del ciclo de vida de envíos, historial de estados y asignación de repartidores."));
     }
 }

@@ -8,7 +8,6 @@ import ar.edu.unju.fi.logitrack.shipment.dto.envio.HistorialEstadoResponse;
 import ar.edu.unju.fi.logitrack.shipment.dto.envio.RegistrarEnvioRequest;
 import ar.edu.unju.fi.logitrack.shipment.entity.*;
 import ar.edu.unju.fi.logitrack.shipment.entity.enums.EstadoEnvio;
-import ar.edu.unju.fi.logitrack.shipment.entity.enums.TipoVehiculo;
 import ar.edu.unju.fi.logitrack.shipment.exception.BusinessRuleException;
 import ar.edu.unju.fi.logitrack.shipment.exception.InvalidStateTransitionException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
@@ -187,10 +186,9 @@ class ShipmentServiceTest {
     void testCancelarEnvioInvalidoLanzaExcepcion() {
         // GIVEN (Dado): Un envío que ya posee un repartidor asignado y se encuentra EN_RUTA
         UUID envioId = UUID.randomUUID();
-        Repartidor repartidor = new Repartidor("Pedro", TipoVehiculo.MOTO, "pedro@logitrack.test", "+54 388 400-2000");
 
         // Transiciones del modelo de dominio
-        envioEjemplo.asignarRepartidor(repartidor);
+        envioEjemplo.asignarRepartidor(UUID.randomUUID());
         envioEjemplo.cambiarEstado(EstadoEnvio.EN_RUTA);
 
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envioEjemplo));
@@ -251,7 +249,7 @@ class ShipmentServiceTest {
      * porque sin repartidor no puede salir a la calle.
      */
     private void ponerEnvioEnRuta() {
-        envioEjemplo.asignarRepartidor(new Repartidor("Pedro", TipoVehiculo.MOTO, "pedro@logitrack.test", "+54 388 400-2000"));
+        envioEjemplo.asignarRepartidor(UUID.randomUUID());
         envioEjemplo.cambiarEstado(EstadoEnvio.EN_RUTA);
     }
 
@@ -301,7 +299,7 @@ class ShipmentServiceTest {
     @DisplayName("Estados: un envío PENDIENTE con repartidor pasa a EN_RUTA")
     void testCambiarEstadoDePendienteAEnRuta() {
         UUID envioId = UUID.randomUUID();
-        envioEjemplo.asignarRepartidor(new Repartidor("Pedro", TipoVehiculo.MOTO, "pedro@logitrack.test", "+54 388 400-2000"));
+        envioEjemplo.asignarRepartidor(UUID.randomUUID());
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envioEjemplo));
         when(envioRepository.save(any(Envio.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
 
@@ -420,7 +418,7 @@ class ShipmentServiceTest {
     @DisplayName("Historial: cada cambio de estado agrega un registro de auditoría")
     void testCadaCambioDeEstadoQuedaEnElHistorial() {
         UUID envioId = UUID.randomUUID();
-        envioEjemplo.asignarRepartidor(new Repartidor("Pedro", TipoVehiculo.MOTO, "pedro@logitrack.test", "+54 388 400-2000"));
+        envioEjemplo.asignarRepartidor(UUID.randomUUID());
         when(envioRepository.findById(envioId)).thenReturn(Optional.of(envioEjemplo));
         when(envioRepository.save(any(Envio.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
 

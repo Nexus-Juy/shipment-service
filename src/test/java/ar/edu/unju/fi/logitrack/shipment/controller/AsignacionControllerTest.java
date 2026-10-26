@@ -1,11 +1,9 @@
 package ar.edu.unju.fi.logitrack.shipment.controller;
 
-import ar.edu.unju.fi.logitrack.shipment.dto.repartidor.AsignacionResponse;
-import ar.edu.unju.fi.logitrack.shipment.dto.repartidor.RepartidorResponse;
+import ar.edu.unju.fi.logitrack.shipment.dto.asignacion.AsignacionResponse;
 import ar.edu.unju.fi.logitrack.shipment.entity.enums.EstadoEnvio;
-import ar.edu.unju.fi.logitrack.shipment.entity.enums.EstadoRepartidor;
-import ar.edu.unju.fi.logitrack.shipment.entity.enums.TipoVehiculo;
 import ar.edu.unju.fi.logitrack.shipment.exception.BusinessRuleException;
+import ar.edu.unju.fi.logitrack.shipment.exception.CourierServiceUnavailableException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import ar.edu.unju.fi.logitrack.shipment.service.AsignacionService;
 import org.junit.jupiter.api.DisplayName;
@@ -16,7 +14,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
@@ -45,18 +42,14 @@ class AsignacionControllerTest {
     @Test
     @DisplayName("PUT: 200 con el envío y el repartidor asignado")
     void asignarDevuelve200() throws Exception {
-        Instant ahora = Instant.now();
-        RepartidorResponse repartidor = new RepartidorResponse(
-                repartidorId, "Juan Pérez", TipoVehiculo.MOTO, "juan.perez@logitrack.test", "+54 388 400-2000",
-                EstadoRepartidor.ACTIVO, ahora, ahora);
         given(asignacionService.asignarRepartidor(envioId, repartidorId))
-                .willReturn(new AsignacionResponse(envioId, "LT-2026-000001", EstadoEnvio.PENDIENTE, repartidor));
+                .willReturn(new AsignacionResponse(envioId, "LT-2026-000001", EstadoEnvio.PENDIENTE, repartidorId));
 
         mockMvc.perform(put(URL, envioId).contentType(MediaType.APPLICATION_JSON).content(body()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.envioId").value(envioId.toString()))
                 .andExpect(jsonPath("$.estadoEnvio").value("PENDIENTE"))
-                .andExpect(jsonPath("$.repartidor.id").value(repartidorId.toString()));
+                .andExpect(jsonPath("$.repartidorId").value(repartidorId.toString()));
     }
 
     @Test
@@ -89,7 +82,7 @@ class AsignacionControllerTest {
     @DisplayName("PUT: 422 si el repartidor está INACTIVO")
     void asignarRepartidorInactivoDevuelve422() throws Exception {
         given(asignacionService.asignarRepartidor(envioId, repartidorId))
-                .willThrow(new BusinessRuleException("El repartidor Juan Pérez no está ACTIVO."));
+                .willThrow(new BusinessRuleException("El repartidor %s no está ACTIVO (estado: INACTIVO).".formatted(repartidorId)));
 
         mockMvc.perform(put(URL, envioId).contentType(MediaType.APPLICATION_JSON).content(body()))
                 .andExpect(status().isUnprocessableEntity())
@@ -105,5 +98,16 @@ class AsignacionControllerTest {
         mockMvc.perform(put(URL, envioId).contentType(MediaType.APPLICATION_JSON).content(body()))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.status").value(422));
+    }
+
+    @Test
+    @DisplayName("PUT: 503 si courier-service no está disponible")
+    void asignarConCourierCaidoDevuelve503() throws Exception {
+        given(asignacionService.asignarRepartidor(envioId, repartidorId))
+                .willThrow(new CourierServiceUnavailableException("sin conexión", null));
+
+        mockMvc.perform(put(URL, envioId).contentType(MediaType.APPLICATION_JSON).content(body()))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503));
     }
 }
