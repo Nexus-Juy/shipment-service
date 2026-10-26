@@ -19,7 +19,7 @@
         <!-- Web + validación -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -56,10 +56,15 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Testing: JUnit 5 + Mockito + AssertJ + MockMvc -->
+        <!-- Testing: slices de Spring Boot 4 + JUnit 5 + Mockito + AssertJ + MockMvc -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- BD en memoria para tests: la suite corre sin MySQL ni servicios externos -->
@@ -97,6 +102,10 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <image>
+                        <name>${docker.image.prefix}/${project.artifactId}</name>
+                        <builder>paketobuildpacks/builder-jammy-base:latest</builder>
+                    </image>
                 </configuration>
             </plugin>
         </plugins>
