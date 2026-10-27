@@ -1,5 +1,6 @@
 package ar.edu.unju.fi.logitrack.shipment.security;
 
+import ar.edu.unju.fi.logitrack.common.security.Roles;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,33 +21,24 @@ import java.util.UUID;
 @Component
 public class UsuarioActual {
 
-    public static final String ROL_ADMIN = "ROLE_ADMIN";
-    public static final String ROL_CLIENTE = "ROLE_CLIENTE";
-    public static final String ROL_REPARTIDOR = "ROLE_REPARTIDOR";
-
     /** Claim con el UUID del repartidor (solo para el rol REPARTIDOR). */
     public static final String CLAIM_REPARTIDOR_ID = "repartidorId";
 
     public boolean esAdmin() {
-        return tieneRol(ROL_ADMIN);
+        return tieneRol(Roles.ROLE_ADMIN);
     }
 
     public boolean esCliente() {
-        return tieneRol(ROL_CLIENTE);
+        return tieneRol(Roles.ROLE_CLIENTE);
     }
 
     public boolean esRepartidor() {
-        return tieneRol(ROL_REPARTIDOR);
+        return tieneRol(Roles.ROLE_REPARTIDOR);
     }
 
-    /** UUID del usuario autenticado (claim {@code sub}); {@code null} si no se puede determinar. */
+    /** UUID del usuario autenticado (claim {@code sub}); {@code null} si no hay JWT o no es un UUID. */
     public UUID usuarioId() {
-        Optional<Jwt> jwt = jwt();
-        if (jwt.isPresent()) {
-            return parsearUuid(jwt.get().getSubject());
-        }
-        // En tests con @WithMockUser no hay JWT: el nombre del principal hace de sub.
-        return autenticacion().map(Authentication::getName).map(UsuarioActual::parsearUuid).orElse(null);
+        return jwt().map(Jwt::getSubject).map(UsuarioActual::parsearUuid).orElse(null);
     }
 
     /** UUID del repartidor (claim {@code repartidorId}); {@code null} si el token no lo trae. */

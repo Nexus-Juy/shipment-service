@@ -147,40 +147,46 @@ public class ShipmentServiceImpl implements ShipmentService {
 
     /**
      * Usa el cliente indicado por {@code clienteId}; si no viene, lo busca por email entre los datos
-     * enviados y, si no existe, lo registra.
+     * enviados y, si no existe, lo registra. El alta se guarda una sola vez, ya vinculada al usuario.
      * <p>
      * S2-07: si quien registra es un {@code CLIENTE}, el cliente queda vinculado a su usuario
      * ({@code sub} del token) para poder verificar después la pertenencia de los envíos.
      * </p>
      */
     private Cliente obtenerOCrearCliente(RegistrarEnvioRequest request) {
-        Cliente cliente;
+        UUID usuarioId = usuarioActual.esCliente() ? autorizacion.usuarioIdDelCliente() : null;
+
         if (request.clienteId() != null) {
-            cliente = clienteRepository.findById(request.clienteId())
+            Cliente cliente = clienteRepository.findById(request.clienteId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Cliente", request.clienteId()));
-        } else {
-            DatosClienteRequest datos = request.cliente();
-            if (datos == null) {
-                throw new BusinessRuleException("Para registrar un envío hay que indicar el clienteId o los datos del cliente.");
-            }
-            String email = datos.email().trim();
-            cliente = clienteRepository.findByEmailIgnoreCase(email)
-                .orElseGet(() -> clienteRepository.save(
-                    new Cliente(datos.nombre().trim(), email, datos.telefono())));
+            vincularAlUsuario(cliente, usuarioId);
+            return cliente;
         }
-        vincularAlUsuarioAutenticado(cliente);
-        return cliente;
+
+        DatosClienteRequest datos = request.cliente();
+        if (datos == null) {
+            throw new BusinessRuleException("Para registrar un envío hay que indicar el clienteId o los datos del cliente.");
+        }
+        String email = datos.email().trim();
+        return clienteRepository.findByEmailIgnoreCase(email)
+            .map(cliente -> {
+                vincularAlUsuario(cliente, usuarioId);
+                return cliente;
+            })
+            .orElseGet(() -> {
+                Cliente nuevo = new Cliente(datos.nombre().trim(), email, datos.telefono());
+                vincularAlUsuario(nuevo, usuarioId);
+                return clienteRepository.save(nuevo);
+            });
     }
 
     /** Un CLIENTE solo puede operar con clientes propios o todavía sin dueño. */
-    private void vincularAlUsuarioAutenticado(Cliente cliente) {
-        if (!usuarioActual.esCliente()) {
+    private void vincularAlUsuario(Cliente cliente, UUID usuarioId) {
+        if (usuarioId == null) {
             return;
         }
-        UUID usuarioId = autorizacion.usuarioIdDelCliente();
         if (cliente.getUsuarioId() == null) {
             cliente.vincularUsuario(usuarioId);
-            clienteRepository.save(cliente);
             return;
         }
         if (!cliente.esDeUsuario(usuarioId)) {

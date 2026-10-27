@@ -56,6 +56,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
+        <dependency>
+            <groupId>ar.edu.unju.fi.logitrack</groupId>
+            <artifactId>common-security</artifactId>
+        </dependency>
 
         <!-- Documentación OpenAPI 3 / Swagger UI -->
         <dependency>
