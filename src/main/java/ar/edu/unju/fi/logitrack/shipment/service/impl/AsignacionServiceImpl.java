@@ -8,6 +8,7 @@ import ar.edu.unju.fi.logitrack.shipment.exception.BusinessRuleException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import ar.edu.unju.fi.logitrack.shipment.mapper.AsignacionMapper;
 import ar.edu.unju.fi.logitrack.shipment.repository.EnvioRepository;
+import ar.edu.unju.fi.logitrack.shipment.security.AutorizacionEnvio;
 import ar.edu.unju.fi.logitrack.shipment.service.AsignacionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,12 +24,16 @@ public class AsignacionServiceImpl implements AsignacionService {
     private final EnvioRepository envioRepository;
     private final CourierClient courierClient;
     private final AsignacionMapper asignacionMapper;
+    private final AutorizacionEnvio autorizacion;
 
     @Override
     @Transactional
     public AsignacionResponse asignarRepartidor(UUID envioId, UUID repartidorId) {
         Envio envio = envioRepository.findById(envioId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Envio", envioId));
+
+        // S2-07: un CLIENTE solo asigna repartidores a sus propios envios.
+        autorizacion.verificarAsignacion(envio);
 
         // Primero se valida el envío para no gastar una llamada remota en un pedido inválido.
         envio.validarAsignacionPosible();

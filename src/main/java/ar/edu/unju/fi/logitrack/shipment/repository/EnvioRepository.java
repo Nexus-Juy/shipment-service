@@ -20,5 +20,10 @@ public interface EnvioRepository extends JpaRepository<Envio, UUID> {
 
     List<Envio> findByRepartidorIdAndEstadoOrderByCreatedAtDesc(UUID repartidorId, EstadoEnvio estado);
 
+    /** Envíos de un cliente identificado por el usuario del token (S2-07). */
+    List<Envio> findByClienteUsuarioIdOrderByCreatedAtDesc(UUID usuarioId);
+
+    List<Envio> findByClienteUsuarioIdAndEstadoOrderByCreatedAtDesc(UUID usuarioId, EstadoEnvio estado);
+
     boolean existsByRepartidorIdAndEstado(UUID repartidorId, EstadoEnvio estado);
 }

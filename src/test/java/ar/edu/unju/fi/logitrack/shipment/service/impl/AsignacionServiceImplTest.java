@@ -11,6 +11,7 @@ import ar.edu.unju.fi.logitrack.shipment.exception.BusinessRuleException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import ar.edu.unju.fi.logitrack.shipment.mapper.AsignacionMapper;
 import ar.edu.unju.fi.logitrack.shipment.repository.EnvioRepository;
+import ar.edu.unju.fi.logitrack.shipment.security.AutorizacionEnvio;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class AsignacionServiceImplTest {
     @Mock
     private CourierClient courierClient;
 
+    @Mock
+    private AutorizacionEnvio autorizacion;
+
     private AsignacionServiceImpl service;
 
     private final UUID envioId = UUID.randomUUID();
@@ -52,7 +56,7 @@ class AsignacionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new AsignacionServiceImpl(envioRepository, courierClient, new AsignacionMapper());
+        service = new AsignacionServiceImpl(envioRepository, courierClient, new AsignacionMapper(), autorizacion);
         cliente = TestDataFactory.cliente();
     }
 
