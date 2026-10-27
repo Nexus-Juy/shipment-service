@@ -155,11 +155,12 @@ class ShipmentSecurityTest {
     }
 
     @Test
-    @DisplayName("Un token sin roles puede consultar (solo se exige autenticación)")
-    void tokenSinRolesPuedeConsultar() throws Exception {
+    @DisplayName("Un token sin roles no puede listar envíos (no hay a quién pertenecer) (403)")
+    void tokenSinRolesNoPuedeConsultar() throws Exception {
         mockMvc.perform(get(ENVIOS)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + JwtTestSupport.token()))
-            .andExpect(status().isOk());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.title").value("Acceso denegado"));
     }
 
     @Test

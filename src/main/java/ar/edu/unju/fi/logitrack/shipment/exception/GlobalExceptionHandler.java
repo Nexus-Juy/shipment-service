@@ -33,6 +33,15 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Autorización por pertenencia (S2-07): el usuario está autenticado pero el recurso es de otro
+     * (HTTP 403).
+     */
+    @ExceptionHandler(AccesoDenegadoException.class)
+    public ResponseEntity<ProblemDetail> handleAccesoDenegado(AccesoDenegadoException ex) {
+        return build(HttpStatus.FORBIDDEN, "Acceso denegado", ex.getMessage());
+    }
+
+    /**
      * Maneja violaciones a reglas de negocio de la aplicación (HTTP 422).
      */
     @ExceptionHandler(BusinessRuleException.class)

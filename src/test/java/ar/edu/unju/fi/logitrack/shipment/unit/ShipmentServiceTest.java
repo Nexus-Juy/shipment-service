@@ -13,6 +13,8 @@ import ar.edu.unju.fi.logitrack.shipment.exception.InvalidStateTransitionExcepti
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import ar.edu.unju.fi.logitrack.shipment.mapper.EnvioMapper;
 import ar.edu.unju.fi.logitrack.shipment.repository.*;
+import ar.edu.unju.fi.logitrack.shipment.security.AutorizacionEnvio;
+import ar.edu.unju.fi.logitrack.shipment.security.UsuarioActual;
 import ar.edu.unju.fi.logitrack.shipment.service.impl.ShipmentServiceImpl;
 import ar.edu.unju.fi.logitrack.shipment.service.TrackingCodeGenerator;
 
@@ -37,6 +39,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.*;
 
 /**
@@ -72,6 +75,13 @@ class ShipmentServiceTest {
     @Spy
     private TrackingCodeGenerator trackingCodeGenerator = new TrackingCodeGenerator();
 
+    /** Autorización por pertenencia (S2-07): en los unitarios se comporta como ADMIN sin restricción. */
+    @Mock
+    private AutorizacionEnvio autorizacion;
+
+    @Mock
+    private UsuarioActual usuarioActual;
+
     // =========================================================================
     // INYECCIÓN DEL SERVICIO BAJO PRUEBA
     // =========================================================================
@@ -93,6 +103,10 @@ class ShipmentServiceTest {
      */
     @BeforeEach
     void setUp() {
+        // El mock de autorización se comporta como un ADMIN: no restringe el listado.
+        lenient().when(autorizacion.repartidorIdParaListado(nullable(UUID.class)))
+            .thenAnswer(invocacion -> invocacion.getArgument(0));
+
         // Inicialización de un cliente simulado
         clienteEjemplo = new Cliente("Juan Perez", "juan@gmail.com", "3881234567");
 
@@ -445,7 +459,7 @@ class ShipmentServiceTest {
         List<HistorialEstado> registros = new ArrayList<>(envioEjemplo.getHistorial());
         Collections.reverse(registros);
 
-        when(envioRepository.existsById(envioId)).thenReturn(true);
+        when(envioRepository.findById(envioId)).thenReturn(Optional.of(envioEjemplo));
         when(historialEstadoRepository.findByEnvioIdOrderByFechaHoraDesc(envioId)).thenReturn(registros);
         when(envioMapper.toHistorialResponse(any(HistorialEstado.class))).thenAnswer(invocacion -> {
             HistorialEstado registro = invocacion.getArgument(0);
@@ -468,7 +482,7 @@ class ShipmentServiceTest {
     @DisplayName("Historial: pedir el historial de un envío que no existe lanza ResourceNotFoundException")
     void testObtenerHistorialDeEnvioInexistente() {
         UUID envioId = UUID.randomUUID();
-        when(envioRepository.existsById(envioId)).thenReturn(false);
+        when(envioRepository.findById(envioId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> shipmentService.obtenerHistorial(envioId));
 

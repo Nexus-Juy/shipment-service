@@ -9,12 +9,15 @@ import ar.edu.unju.fi.logitrack.shipment.entity.Cliente;
 import ar.edu.unju.fi.logitrack.shipment.entity.Direccion;
 import ar.edu.unju.fi.logitrack.shipment.entity.Envio;
 import ar.edu.unju.fi.logitrack.shipment.entity.enums.EstadoEnvio;
+import ar.edu.unju.fi.logitrack.shipment.exception.AccesoDenegadoException;
 import ar.edu.unju.fi.logitrack.shipment.exception.BusinessRuleException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import ar.edu.unju.fi.logitrack.shipment.mapper.EnvioMapper;
 import ar.edu.unju.fi.logitrack.shipment.repository.ClienteRepository;
 import ar.edu.unju.fi.logitrack.shipment.repository.EnvioRepository;
 import ar.edu.unju.fi.logitrack.shipment.repository.HistorialEstadoRepository;
+import ar.edu.unju.fi.logitrack.shipment.security.AutorizacionEnvio;
+import ar.edu.unju.fi.logitrack.shipment.security.UsuarioActual;
 import ar.edu.unju.fi.logitrack.shipment.service.ShipmentService;
 import ar.edu.unju.fi.logitrack.shipment.service.TrackingCodeGenerator;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +36,8 @@ public class ShipmentServiceImpl implements ShipmentService {
     private final HistorialEstadoRepository historialEstadoRepository;
     private final EnvioMapper envioMapper;
     private final TrackingCodeGenerator trackingCodeGenerator;
+    private final AutorizacionEnvio autorizacion;
+    private final UsuarioActual usuarioActual;
 
     @Override
     @Transactional
@@ -53,7 +58,9 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional(readOnly = true)
     public EnvioResponse obtenerPorId(UUID id) {
-        return envioMapper.toResponse(buscarEnvio(id));
+        Envio envio = buscarEnvio(id);
+        autorizacion.verificarLectura(envio);
+        return envioMapper.toResponse(envio);
     }
 
     @Override
@@ -61,6 +68,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     public EnvioResponse obtenerPorCodigoSeguimiento(String codigo) {
         Envio envio = envioRepository.findByCodigoSeguimiento(codigo)
             .orElseThrow(() -> ResourceNotFoundException.of("Envío con código", codigo));
+        autorizacion.verificarLectura(envio);
         return envioMapper.toResponse(envio);
     }
 
@@ -74,6 +82,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional
     public EnvioResponse cambiarEstado(UUID id, CambiarEstadoRequest request) {
         Envio envio = buscarEnvio(id);
+        autorizacion.verificarCambioDeEstado(envio);
         envio.cambiarEstado(request.estado());
         return envioMapper.toResponse(envioRepository.save(envio));
     }
@@ -82,6 +91,7 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Transactional
     public EnvioResponse cancelarEnvio(UUID id) {
         Envio envio = buscarEnvio(id);
+        autorizacion.verificarCancelacion(envio);
         envio.cancelar();
         return envioMapper.toResponse(envioRepository.save(envio));
     }
@@ -89,20 +99,40 @@ public class ShipmentServiceImpl implements ShipmentService {
     @Override
     @Transactional(readOnly = true)
     public List<HistorialEstadoResponse> obtenerHistorial(UUID id) {
-        if (!envioRepository.existsById(id)) {
-            throw ResourceNotFoundException.of("Envío", id);
-        }
+        Envio envio = buscarEnvio(id);
+        autorizacion.verificarLectura(envio);
         return historialEstadoRepository.findByEnvioIdOrderByFechaHoraDesc(id).stream()
             .map(envioMapper::toHistorialResponse)
             .toList();
     }
 
+    /**
+     * S2-07: el listado se recorta según quién consulta.
+     * <ul>
+     *   <li>{@code ADMIN}: todos los envíos, con los filtros pedidos.</li>
+     *   <li>{@code CLIENTE}: solo los de su cliente; el filtro por repartidor se aplica sobre esos.</li>
+     *   <li>{@code REPARTIDOR}: solo los asignados a él; pedir otro repartidor es 403.</li>
+     * </ul>
+     */
     private List<Envio> buscarSegunFiltros(EstadoEnvio estado, UUID repartidorId) {
-        if (repartidorId != null && estado != null) {
-            return envioRepository.findByRepartidorIdAndEstadoOrderByCreatedAtDesc(repartidorId, estado);
+        UUID filtro = autorizacion.repartidorIdParaListado(repartidorId);
+
+        if (usuarioActual.esCliente()) {
+            UUID usuarioId = autorizacion.usuarioIdDelCliente();
+            List<Envio> propios = estado != null
+                ? envioRepository.findByClienteUsuarioIdAndEstadoOrderByCreatedAtDesc(usuarioId, estado)
+                : envioRepository.findByClienteUsuarioIdOrderByCreatedAtDesc(usuarioId);
+            if (filtro == null) {
+                return propios;
+            }
+            return propios.stream().filter(envio -> filtro.equals(envio.getRepartidorId())).toList();
         }
-        if (repartidorId != null) {
-            return envioRepository.findByRepartidorIdOrderByCreatedAtDesc(repartidorId);
+
+        if (filtro != null && estado != null) {
+            return envioRepository.findByRepartidorIdAndEstadoOrderByCreatedAtDesc(filtro, estado);
+        }
+        if (filtro != null) {
+            return envioRepository.findByRepartidorIdOrderByCreatedAtDesc(filtro);
         }
         if (estado != null) {
             return envioRepository.findByEstadoOrderByCreatedAtDesc(estado);
@@ -118,19 +148,45 @@ public class ShipmentServiceImpl implements ShipmentService {
     /**
      * Usa el cliente indicado por {@code clienteId}; si no viene, lo busca por email entre los datos
      * enviados y, si no existe, lo registra.
+     * <p>
+     * S2-07: si quien registra es un {@code CLIENTE}, el cliente queda vinculado a su usuario
+     * ({@code sub} del token) para poder verificar después la pertenencia de los envíos.
+     * </p>
      */
     private Cliente obtenerOCrearCliente(RegistrarEnvioRequest request) {
+        Cliente cliente;
         if (request.clienteId() != null) {
-            return clienteRepository.findById(request.clienteId())
+            cliente = clienteRepository.findById(request.clienteId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Cliente", request.clienteId()));
+        } else {
+            DatosClienteRequest datos = request.cliente();
+            if (datos == null) {
+                throw new BusinessRuleException("Para registrar un envío hay que indicar el clienteId o los datos del cliente.");
+            }
+            String email = datos.email().trim();
+            cliente = clienteRepository.findByEmailIgnoreCase(email)
+                .orElseGet(() -> clienteRepository.save(
+                    new Cliente(datos.nombre().trim(), email, datos.telefono())));
         }
-        DatosClienteRequest datos = request.cliente();
-        if (datos == null) {
-            throw new BusinessRuleException("Para registrar un envío hay que indicar el clienteId o los datos del cliente.");
+        vincularAlUsuarioAutenticado(cliente);
+        return cliente;
+    }
+
+    /** Un CLIENTE solo puede operar con clientes propios o todavía sin dueño. */
+    private void vincularAlUsuarioAutenticado(Cliente cliente) {
+        if (!usuarioActual.esCliente()) {
+            return;
         }
-        String email = datos.email().trim();
-        return clienteRepository.findByEmailIgnoreCase(email)
-            .orElseGet(() -> clienteRepository.save(new Cliente(datos.nombre().trim(), email, datos.telefono())));
+        UUID usuarioId = autorizacion.usuarioIdDelCliente();
+        if (cliente.getUsuarioId() == null) {
+            cliente.vincularUsuario(usuarioId);
+            clienteRepository.save(cliente);
+            return;
+        }
+        if (!cliente.esDeUsuario(usuarioId)) {
+            throw new AccesoDenegadoException(
+                "El cliente indicado está asociado a otro usuario y no puede registrar envíos a su nombre.");
+        }
     }
 
     private String generarCodigoUnico() {
