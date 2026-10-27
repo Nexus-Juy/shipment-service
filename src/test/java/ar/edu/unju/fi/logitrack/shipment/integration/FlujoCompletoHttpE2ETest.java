@@ -1,5 +1,6 @@
 package ar.edu.unju.fi.logitrack.shipment.integration;
 
+import ar.edu.unju.fi.logitrack.shipment.security.JwtTestSupport;
 import com.jayway.jsonpath.JsonPath;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -50,6 +52,9 @@ class FlujoCompletoHttpE2ETest {
 
     private static final String ENVIOS = "/api/v1/envios";
 
+    /** Token real con el que se firma la petición que shipment reenvía a courier (relay). */
+    private static final String TOKEN = JwtTestSupport.token("ADMIN");
+
     /** UUIDs de repartidores que conoce el courier falso (ver db/init/02-couriers.sql). */
     private static final UUID REPARTIDOR_ACTIVO =
             UUID.fromString("3f6c1a52-8e0b-4d7a-9c11-0a1b2c3d4e01");
@@ -75,6 +80,9 @@ class FlujoCompletoHttpE2ETest {
     /** Peticiones que recibió el courier falso, para comprobar que hubo tráfico HTTP de verdad. */
     private static final List<String> PETICIONES = new CopyOnWriteArrayList<>();
 
+    /** Header Authorization recibido por el courier falso (prueba del relay del token). */
+    private static final List<String> AUTORIZACIONES = new CopyOnWriteArrayList<>();
+
     private static final HttpServer COURIER_FALSO = iniciarCourierFalso();
 
     @Autowired
@@ -89,12 +97,14 @@ class FlujoCompletoHttpE2ETest {
     @BeforeEach
     void limpiarPeticiones() {
         PETICIONES.clear();
+        AUTORIZACIONES.clear();
     }
 
     @Test
     @DisplayName("E2E HTTP: registra el envío, asigna un repartidor real y lo entrega")
     void flujoCompletoSobreHttpReal() throws Exception {
         String respuesta = mockMvc.perform(post(ENVIOS)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON).content(BODY_ENVIO))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estado").value("PENDIENTE"))
@@ -103,6 +113,7 @@ class FlujoCompletoHttpE2ETest {
 
         // El service consulta la disponibilidad al courier falso por HTTP (sin mocks).
         mockMvc.perform(put(ENVIOS + "/{id}/repartidor", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"repartidorId\": \"%s\"}".formatted(REPARTIDOR_ACTIVO)))
                 .andExpect(status().isOk())
@@ -110,18 +121,22 @@ class FlujoCompletoHttpE2ETest {
 
         assertThat(PETICIONES)
                 .containsExactly("GET /api/v1/repartidores/" + REPARTIDOR_ACTIVO + "/disponibilidad");
+        assertThat(AUTORIZACIONES).containsExactly("Bearer " + TOKEN);
 
         mockMvc.perform(patch(ENVIOS + "/{id}/estado", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"estado\": \"EN_RUTA\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("EN_RUTA"));
 
         mockMvc.perform(patch(ENVIOS + "/{id}/estado", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"estado\": \"ENTREGADO\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("ENTREGADO"));
 
-        mockMvc.perform(get(ENVIOS + "/{id}/historial", envioId))
+        mockMvc.perform(get(ENVIOS + "/{id}/historial", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(3)))
                 .andExpect(jsonPath("$[0].estadoNuevo").value("ENTREGADO"))
@@ -134,12 +149,14 @@ class FlujoCompletoHttpE2ETest {
         String envioId = registrarEnvio();
 
         mockMvc.perform(put(ENVIOS + "/{id}/repartidor", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"repartidorId\": \"%s\"}".formatted(REPARTIDOR_INACTIVO)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.status").value(422));
 
-        mockMvc.perform(get(ENVIOS + "/{id}", envioId))
+        mockMvc.perform(get(ENVIOS + "/{id}", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.repartidorId").doesNotExist());
 
@@ -153,11 +170,13 @@ class FlujoCompletoHttpE2ETest {
         String envioId = registrarEnvio();
 
         mockMvc.perform(put(ENVIOS + "/{id}/repartidor", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"repartidorId\": \"%s\"}".formatted(REPARTIDOR_DESCONOCIDO)))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(get(ENVIOS + "/{id}", envioId))
+        mockMvc.perform(get(ENVIOS + "/{id}", envioId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("PENDIENTE"))
                 .andExpect(jsonPath("$.repartidorId").doesNotExist());
@@ -165,6 +184,7 @@ class FlujoCompletoHttpE2ETest {
 
     private String registrarEnvio() throws Exception {
         String respuesta = mockMvc.perform(post(ENVIOS)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON).content(BODY_ENVIO))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -192,9 +212,18 @@ class FlujoCompletoHttpE2ETest {
         String path = exchange.getRequestURI().getPath();
         PETICIONES.add(exchange.getRequestMethod() + " " + path);
 
+        String autorizacion = exchange.getRequestHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        AUTORIZACIONES.add(autorizacion == null ? "" : autorizacion);
+
         Matcher matcher = RUTA_DISPONIBILIDAD.matcher(path);
         if (!"GET".equals(exchange.getRequestMethod()) || !matcher.matches()) {
             responder(exchange, 404, "{}");
+            return;
+        }
+
+        // Igual que el courier-service real: sin JWT no se atiende la consulta.
+        if (autorizacion == null || !autorizacion.startsWith("Bearer ")) {
+            responder(exchange, 401, "{\"status\": 401}");
             return;
         }
 
