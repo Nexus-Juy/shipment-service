@@ -36,14 +36,9 @@ public class UsuarioActual {
         return tieneRol(Roles.ROLE_REPARTIDOR);
     }
 
-    /** UUID del usuario autenticado (claim {@code sub}); {@code null} si no se puede determinar. */
+    /** UUID del usuario autenticado (claim {@code sub}); {@code null} si no hay JWT o no es un UUID. */
     public UUID usuarioId() {
-        Optional<Jwt> jwt = jwt();
-        if (jwt.isPresent()) {
-            return parsearUuid(jwt.get().getSubject());
-        }
-        // En tests con @WithMockUser no hay JWT: el nombre del principal hace de sub.
-        return autenticacion().map(Authentication::getName).map(UsuarioActual::parsearUuid).orElse(null);
+        return jwt().map(Jwt::getSubject).map(UsuarioActual::parsearUuid).orElse(null);
     }
 
     /** UUID del repartidor (claim {@code repartidorId}); {@code null} si el token no lo trae. */
