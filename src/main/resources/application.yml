@@ -45,6 +45,11 @@ courier:
   service:
     url: ${COURIER_SERVICE_URL:http://localhost:8082}
 
+# Secreto compartido con security-service para validar la firma HS256 de los JWT (S2-06).
+# En Docker los tres servicios reciben el mismo JWT_SECRET.
+jwt:
+  secret: ${JWT_SECRET:ClaveSecretaSuperSeguraParaFirmarTokensJWTLogiTrack2026!}
+
 management:
   endpoints:
     web:

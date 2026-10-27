@@ -4,10 +4,13 @@ import ar.edu.unju.fi.logitrack.shipment.dto.courier.DisponibilidadResponse;
 import ar.edu.unju.fi.logitrack.shipment.exception.CourierServiceUnavailableException;
 import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.UUID;
 
@@ -33,6 +36,14 @@ public class CourierClientImpl implements CourierClient {
         try {
             DisponibilidadResponse respuesta = restClient.get()
                     .uri("/api/v1/repartidores/{id}/disponibilidad", repartidorId)
+                    .headers(headers -> {
+                        // S2-06: courier-service exige JWT; se propaga el token del usuario que
+                        // originó la operación para no perder la identidad en la llamada interna.
+                        String token = tokenDelRequestActual();
+                        if (token != null) {
+                            headers.set(HttpHeaders.AUTHORIZATION, token);
+                        }
+                    })
                     .retrieve()
                     .body(DisponibilidadResponse.class);
 
@@ -51,5 +62,17 @@ public class CourierClientImpl implements CourierClient {
             throw new CourierServiceUnavailableException(
                     "No se pudo consultar courier-service: " + ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * Token Bearer de la petición HTTP en curso, si la llamada se originó en un request.
+     * Fuera de un request (por ejemplo en un test unitario) devuelve {@code null} y no se envía
+     * el header.
+     */
+    private String tokenDelRequestActual() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            return attributes.getRequest().getHeader(HttpHeaders.AUTHORIZATION);
+        }
+        return null;
     }
 }

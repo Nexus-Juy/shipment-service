@@ -5,6 +5,7 @@ import ar.edu.unju.fi.logitrack.shipment.client.CourierClient;
 import ar.edu.unju.fi.logitrack.shipment.dto.courier.DisponibilidadResponse;
 import ar.edu.unju.fi.logitrack.shipment.repository.ClienteRepository;
 import ar.edu.unju.fi.logitrack.shipment.repository.EnvioRepository;
+import ar.edu.unju.fi.logitrack.shipment.security.MockMvcConSeguridad;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -12,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,6 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(MockMvcConSeguridad.class)
+@WithMockUser(roles = "ADMIN")
 class GestionEnviosIntegrationTest {
 
     private static final String ENVIOS = "/api/v1/envios";
