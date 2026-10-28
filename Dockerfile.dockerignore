@@ -1,0 +1,8 @@
+# .dockerignore de shipment-service (S2-08).
+# Docker lo usa automáticamente al construir con -f shipment-service/Dockerfile.
+# Se ignora todo y solo se deja pasar lo que la imagen necesita para compilar el módulo.
+*
+!pom.xml
+!*/pom.xml
+!common-security/src/main/
+!shipment-service/src/main/
