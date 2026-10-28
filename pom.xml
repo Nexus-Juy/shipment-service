@@ -30,6 +30,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Configuración centralizada: toma sus propiedades del config-server (S2-04) -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency>
+
         <!-- Persistencia -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
