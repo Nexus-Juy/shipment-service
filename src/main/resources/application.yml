@@ -1,57 +1,10 @@
-server:
-  port: ${SERVER_PORT:8081}
-
+# La configuración de este servicio vive en el repositorio logitrack-config
+# y la entrega el config-server al arrancar (S2-04).
+# Acá solo queda lo necesario para saber quién es el servicio y dónde buscar su configuración.
 spring:
   application:
     name: shipment-service
-
-  http:
-    client:
-      # Sin timeouts, un courier-service colgado bloquearía los hilos de shipment-service.
-      connect-timeout: 2s
-      read-timeout: 5s
-
-  datasource:
-    # Por defecto apunta al MySQL de docker-compose expuesto en el puerto 3307 de tu máquina.
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:logitrack_shipments}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: ${DB_USER:logitrack}
-    password: ${DB_PASSWORD:logitrack}
-
-  jpa:
-    open-in-view: false
-    hibernate:
-      # El esquema inicial lo crea db/init/01-schema.sql; "update" solo agrega lo que falte.
-      ddl-auto: ${JPA_DDL_AUTO:update}
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
-        jdbc:
-          time_zone: UTC
-        type:
-          # UUID guardado como CHAR(36) legible en lugar de BINARY(16)
-          preferred_uuid_jdbc_type: CHAR
-
-springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-    operations-sorter: method
-
-# URL del microservicio de repartidores. En Docker se sobreescribe con
-# COURIER_SERVICE_URL=http://courier-service:8082.
-courier:
-  service:
-    url: ${COURIER_SERVICE_URL:http://localhost:8082}
-
-# Secreto compartido con security-service para validar la firma HS256 de los JWT (S2-06).
-# En Docker los tres servicios reciben el mismo JWT_SECRET.
-jwt:
-  secret: ${JWT_SECRET:ClaveSecretaSuperSeguraParaFirmarTokensJWTLogiTrack2026!}
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"

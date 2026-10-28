@@ -2,6 +2,9 @@
 spring:
   application:
     name: shipment-service-test
+  cloud:
+    config:
+      enabled: false
   datasource:
     url: jdbc:h2:mem:logitrack;MODE=MySQL;DB_CLOSE_DELAY=-1
     username: sa
