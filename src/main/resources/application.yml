@@ -8,3 +8,10 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  cloud:
+    openfeign:
+      client:
+        config:
+          courier-service:
+            connectTimeout: 2000
+            readTimeout: 5000

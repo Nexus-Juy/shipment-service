@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * A diferencia de {@link GestionEnviosIntegrationTest} (que reemplaza {@code CourierClient} por un
  * mock), acá se levanta un <strong>courier-service falso sobre HTTP real</strong> con
  * {@link HttpServer} y se apunta {@code courier.service.url} a su puerto efímero. Así se ejercita
- * el camino completo: controller → service → {@code RestClient} → socket TCP → servicio externo,
+ * el camino completo: controller → service → cliente Feign → socket TCP → servicio externo,
  * incluyendo la serialización JSON de ida y vuelta.
  * </p>
  */
