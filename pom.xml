@@ -5,15 +5,47 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>ar.edu.unju.fi.logitrack</groupId>
-        <artifactId>daas-proyecto-final</artifactId>
-        <version>0.1.0-SNAPSHOT</version>
-        <relativePath>../pom.xml</relativePath>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.0.9</version>
+        <relativePath/>
     </parent>
 
+    <groupId>ar.edu.unju.fi.logitrack</groupId>
     <artifactId>shipment-service</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
     <name>shipment-service</name>
     <description>Microservicio de ciclo de vida de envíos, historial de estados y asignación</description>
+
+    <properties>
+        <java.version>25</java.version>
+        <spring-cloud.version>2025.1.1</spring-cloud.version>
+        <springdoc.version>3.2.0</springdoc.version>
+        <jacoco.version>0.8.15</jacoco.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Prefijo de la imagen que se publica en Docker Hub -->
+        <docker.image.prefix>macostag26</docker.image.prefix>
+    </properties>
+
+    <!-- Versiones que antes venían del pom raíz del monorepo -->
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring Cloud BOM (compatible con Spring Boot 4.0.x) -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- OpenAPI / Swagger -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Web + validación -->
@@ -53,7 +85,8 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Seguridad: resource server que valida los JWT emitidos por security-service (S2-06) -->
+        <!-- Seguridad: resource server que valida los JWT emitidos por security-service (S2-06).
+             Las clases de apoyo (decoder, 401/403, roles) están en el paquete shipment.security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
@@ -61,10 +94,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>ar.edu.unju.fi.logitrack</groupId>
-            <artifactId>common-security</artifactId>
         </dependency>
 
         <!-- Documentación OpenAPI 3 / Swagger UI -->
@@ -107,6 +136,38 @@
 
     <build>
         <plugins>
+            <!-- Soporte para Mockito en versiones recientes de JDK.
+                 @{argLine} lo completa jacoco:prepare-agent. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading -Xshare:off</argLine>
+                </configuration>
+            </plugin>
+
+            <!-- Cobertura de tests: genera target/site/jacoco/ al final de verify. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>preparar-agente</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>reporte-cobertura</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- JDK 23+ ya no ejecuta procesadores de anotaciones implícitamente -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
