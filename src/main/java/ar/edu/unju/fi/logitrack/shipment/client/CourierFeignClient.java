@@ -10,15 +10,15 @@ import java.util.UUID;
 /**
  * Cliente declarativo (Spring Cloud OpenFeign) de {@code courier-service}.
  * <p>
- * La URL base sale de {@code courier.service.url}, así el mismo código funciona contra
- * {@code http://localhost:8082} en desarrollo y contra {@code http://courier-service:8082} en Docker.
+ * No tiene URL: se resuelve por el <b>nombre lógico</b> {@code courier-service}, que es el nombre con el
+ * que courier-service se registra en Eureka. Spring Cloud LoadBalancer consulta a Eureka por las
+ * instancias disponibles y elige una, así que shipment-service no conoce IP ni puerto de courier-service.
  * Los errores HTTP y de conexión llegan como {@link feign.FeignException}; los traduce
  * {@link CourierClientImpl}, que es el que usa el resto del servicio.
  * </p>
  */
 @FeignClient(
         name = "courier-service",
-        url = "${courier.service.url}",
         configuration = CourierFeignConfig.class)
 public interface CourierFeignClient {
 

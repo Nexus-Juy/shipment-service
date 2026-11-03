@@ -41,7 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>
  * A diferencia de {@link GestionEnviosIntegrationTest} (que reemplaza {@code CourierClient} por un
  * mock), acá se levanta un <strong>courier-service falso sobre HTTP real</strong> con
- * {@link HttpServer} y se apunta {@code courier.service.url} a su puerto efímero. Así se ejercita
+ * {@link HttpServer} y se lo registra como la instancia de {@code courier-service} en el discovery simple de Spring Cloud (sin Eureka). Así se ejercita
  * el camino completo: controller → service → cliente Feign → socket TCP → servicio externo,
  * incluyendo la serialización JSON de ida y vuelta.
  * </p>
@@ -90,7 +90,8 @@ class FlujoCompletoHttpE2ETest {
 
     @DynamicPropertySource
     static void apuntarAlCourierFalso(DynamicPropertyRegistry registry) {
-        registry.add("courier.service.url",
+        // Feign resuelve "courier-service" por nombre: el discovery simple lo apunta al servidor falso.
+        registry.add("spring.cloud.discovery.client.simple.instances.courier-service[0].uri",
                 () -> "http://127.0.0.1:" + COURIER_FALSO.getAddress().getPort());
     }
 

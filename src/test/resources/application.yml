@@ -24,11 +24,6 @@ eureka:
   client:
     enabled: false
 
-# URL de courier-service para los tests de contexto (los unitarios usan mocks).
-courier:
-  service:
-    url: http://localhost:8082
-
 # Mismo secreto con el que los tests firman los JWT (ver JwtTestSupport).
 jwt:
   secret: ClaveSecretaDeTestSuperSeguraParaTestsUnitariosLogiTrack2026!
