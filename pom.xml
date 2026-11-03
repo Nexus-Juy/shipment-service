@@ -64,6 +64,12 @@
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
+        <!-- Balanceo del lado del cliente: Feign resuelve courier-service por su nombre en Eureka (S3-03) -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
         <!-- Descubrimiento: el servicio se registra en eureka-server al arrancar (S3-02) -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
