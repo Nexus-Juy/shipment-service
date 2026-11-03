@@ -51,7 +51,13 @@ disponible.
 
 - `CourierFeignClient`: interfaz `@FeignClient` que declara la llamada. No lleva URL: se resuelve por el nombre
   lógico `courier-service` registrado en Eureka (Spring Cloud LoadBalancer elige la instancia).
-- `CourierFeignConfig`: reenvía el header `Authorization` del usuario (JWT) a `courier-service`.
-- `CourierClientImpl`: usa el cliente Feign y traduce los errores: `404` → 404 (repartidor inexistente);
-  `5xx`, timeout o conexión rechazada → 503.
+- `CourierFeignConfig`: configuración propia del cliente (registra el `ErrorDecoder`).
+- `CourierErrorDecoder`: traduce las respuestas de error: `404` → 404 (repartidor inexistente); `5xx` u otro
+  error → 503.
+- `CourierFeignFallbackFactory`: fallback cuando la llamada falla (courier caído, timeout, sin instancias en
+  Eureka o circuito abierto) → 503 con `ProblemDetail`. No devuelve un "disponible" inventado.
+- `ResilienceConfig`: circuit breaker (Resilience4j). Se abre si falla la mitad de las últimas 10 llamadas (con
+  al menos 5 hechas) y queda abierto 10 s; un 404 no cuenta como falla. Límite de tiempo de 6 s.
+- `CourierClientImpl`: toma el JWT de la petición en curso y se lo pasa al cliente Feign. El token viaja como
+  parámetro (no con un interceptor) porque el circuit breaker puede ejecutar la llamada en otro hilo.
 - Timeouts por defecto en `application.yml` (`connectTimeout` 2 s, `readTimeout` 5 s).

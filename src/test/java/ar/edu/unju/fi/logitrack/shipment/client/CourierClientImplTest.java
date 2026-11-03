@@ -2,21 +2,18 @@ package ar.edu.unju.fi.logitrack.shipment.client;
 
 import ar.edu.unju.fi.logitrack.shipment.dto.courier.DisponibilidadResponse;
 import ar.edu.unju.fi.logitrack.shipment.exception.CourierServiceUnavailableException;
-import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
-import feign.FeignException;
-import feign.Request;
-import feign.RequestTemplate;
-import feign.RetryableException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,10 +21,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 /**
- * Verifica la traducción de errores de {@link CourierClientImpl} sobre {@link CourierFeignClient}.
+ * {@link CourierClientImpl} solo delega en el cliente Feign y le pasa el JWT de la petición en curso.
  * <p>
- * El camino HTTP real (serialización, 200/404, relay del JWT) lo cubre
- * {@code FlujoCompletoHttpE2ETest}, que levanta un courier-service falso con {@code HttpServer}.
+ * La traducción de errores se prueba en {@link CourierErrorDecoderTest} y
+ * {@link CourierFeignFallbackFactoryTest}; el camino HTTP real (circuit breaker incluido), en
+ * {@code FlujoCompletoHttpE2ETest} y {@code AsignacionResilienciaE2ETest}.
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
@@ -41,74 +39,38 @@ class CourierClientImplTest {
     @InjectMocks
     private CourierClientImpl client;
 
+    @AfterEach
+    void limpiarPeticion() {
+        RequestContextHolder.resetRequestAttributes();
+    }
+
     @Test
-    @DisplayName("200: devuelve la disponibilidad que entrega courier-service")
-    void devuelveDisponibilidadDisponible() {
+    @DisplayName("Devuelve la disponibilidad que entrega courier-service")
+    void devuelveLaDisponibilidad() {
         var esperada = new DisponibilidadResponse(repartidorId, "ACTIVO", true);
-        when(courierFeignClient.disponibilidad(repartidorId)).thenReturn(esperada);
+        when(courierFeignClient.disponibilidad(repartidorId, null)).thenReturn(esperada);
 
-        DisponibilidadResponse respuesta = client.consultarDisponibilidad(repartidorId);
-
-        assertThat(respuesta).isEqualTo(esperada);
+        assertThat(client.consultarDisponibilidad(repartidorId)).isEqualTo(esperada);
     }
 
     @Test
-    @DisplayName("200: un repartidor INACTIVO llega con disponible=false")
-    void devuelveDisponibilidadNoDisponible() {
-        when(courierFeignClient.disponibilidad(repartidorId))
-                .thenReturn(new DisponibilidadResponse(repartidorId, "INACTIVO", false));
+    @DisplayName("Reenvía el JWT de la petición HTTP en curso")
+    void reenviaElJwtDeLaPeticion() {
+        var peticion = new MockHttpServletRequest();
+        peticion.addHeader(HttpHeaders.AUTHORIZATION, "Bearer token-del-usuario");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(peticion));
+        var esperada = new DisponibilidadResponse(repartidorId, "ACTIVO", true);
+        when(courierFeignClient.disponibilidad(repartidorId, "Bearer token-del-usuario")).thenReturn(esperada);
 
-        DisponibilidadResponse respuesta = client.consultarDisponibilidad(repartidorId);
-
-        assertThat(respuesta.disponible()).isFalse();
-        assertThat(respuesta.estado()).isEqualTo("INACTIVO");
-    }
-
-    @Test
-    @DisplayName("404: courier-service no conoce al repartidor y se traduce a ResourceNotFoundException")
-    void traduce404ARecursoNoEncontrado() {
-        when(courierFeignClient.disponibilidad(repartidorId))
-                .thenThrow(new FeignException.NotFound("404", peticion(), null, Map.of()));
-
-        assertThatThrownBy(() -> client.consultarDisponibilidad(repartidorId))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining(repartidorId.toString());
-    }
-
-    @Test
-    @DisplayName("500: un error de courier-service se traduce a 503")
-    void traduce5xxAServicioNoDisponible() {
-        when(courierFeignClient.disponibilidad(repartidorId))
-                .thenThrow(new FeignException.InternalServerError("500", peticion(), null, Map.of()));
-
-        assertThatThrownBy(() -> client.consultarDisponibilidad(repartidorId))
-                .isInstanceOf(CourierServiceUnavailableException.class)
-                .hasMessageContaining("500");
-    }
-
-    @Test
-    @DisplayName("Fallo de conexión: se traduce a 503")
-    void traduceFalloDeConexionAServicioNoDisponible() {
-        when(courierFeignClient.disponibilidad(repartidorId))
-                .thenThrow(new RetryableException(-1, "connection refused", Request.HttpMethod.GET,
-                        new IOException("connection refused"), (Long) null, peticion()));
-
-        assertThatThrownBy(() -> client.consultarDisponibilidad(repartidorId))
-                .isInstanceOf(CourierServiceUnavailableException.class)
-                .hasMessageContaining("No se pudo consultar courier-service");
+        assertThat(client.consultarDisponibilidad(repartidorId)).isEqualTo(esperada);
     }
 
     @Test
     @DisplayName("Respuesta vacía: se traduce a 503 en lugar de devolver null")
-    void traduceRespuestaVaciaAServicioNoDisponible() {
-        when(courierFeignClient.disponibilidad(repartidorId)).thenReturn(null);
+    void respuestaVaciaEsServicioNoDisponible() {
+        when(courierFeignClient.disponibilidad(repartidorId, null)).thenReturn(null);
 
         assertThatThrownBy(() -> client.consultarDisponibilidad(repartidorId))
                 .isInstanceOf(CourierServiceUnavailableException.class);
-    }
-
-    private static Request peticion() {
-        return Request.create(Request.HttpMethod.GET, "http://courier-service:8082/api/v1/repartidores/x/disponibilidad",
-                Map.of(), null, StandardCharsets.UTF_8, new RequestTemplate());
     }
 }

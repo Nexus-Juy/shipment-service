@@ -2,19 +2,21 @@ package ar.edu.unju.fi.logitrack.shipment.client;
 
 import ar.edu.unju.fi.logitrack.shipment.dto.courier.DisponibilidadResponse;
 import ar.edu.unju.fi.logitrack.shipment.exception.CourierServiceUnavailableException;
-import ar.edu.unju.fi.logitrack.shipment.exception.ResourceNotFoundException;
-import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.UUID;
 
 /**
  * Implementación de {@link CourierClient} sobre {@link CourierFeignClient} (OpenFeign).
  * <p>
- * Acá se centraliza la traducción de errores: un 404 de courier-service es "repartidor inexistente" y
- * cualquier otra falla (5xx, timeout, conexión rechazada, respuesta vacía) es "courier-service no
- * disponible", que el {@code GlobalExceptionHandler} responde con 503.
+ * Ya no traduce errores: eso lo hacen {@link CourierErrorDecoder} (404 y 5xx) y
+ * {@link CourierFeignFallbackFactory} (courier caído, timeout, sin instancias o circuito abierto). Acá solo
+ * se toma el JWT del usuario que originó la operación y se le pasa al cliente, para no perder su identidad
+ * en la llamada interna (S2-06).
  * </p>
  */
 @Component
@@ -25,21 +27,19 @@ public class CourierClientImpl implements CourierClient {
 
     @Override
     public DisponibilidadResponse consultarDisponibilidad(UUID repartidorId) {
-        try {
-            DisponibilidadResponse respuesta = courierFeignClient.disponibilidad(repartidorId);
-            if (respuesta == null) {
-                throw new CourierServiceUnavailableException(
-                        "courier-service devolvió una respuesta vacía para el repartidor " + repartidorId, null);
-            }
-            return respuesta;
-        } catch (FeignException.NotFound ex) {
-            throw ResourceNotFoundException.of("Repartidor", repartidorId);
-        } catch (FeignException ex) {
-            // status() es -1 cuando no hubo respuesta HTTP (conexión rechazada, timeout).
-            String mensaje = ex.status() > 0
-                    ? "courier-service respondió con estado " + ex.status()
-                    : "No se pudo consultar courier-service: " + ex.getMessage();
-            throw new CourierServiceUnavailableException(mensaje, ex);
+        DisponibilidadResponse respuesta = courierFeignClient.disponibilidad(repartidorId, jwtDeLaPeticionActual());
+        if (respuesta == null) {
+            throw new CourierServiceUnavailableException(
+                    "courier-service devolvió una respuesta vacía para el repartidor " + repartidorId, null);
         }
+        return respuesta;
+    }
+
+    /** Header Authorization de la petición HTTP en curso, o {@code null} si no hay (por ejemplo, en un test unitario). */
+    private static String jwtDeLaPeticionActual() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes atributos) {
+            return atributos.getRequest().getHeader(HttpHeaders.AUTHORIZATION);
+        }
+        return null;
     }
 }
