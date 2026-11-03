@@ -1,10 +1,7 @@
 package ar.edu.unju.fi.logitrack.shipment.client;
 
-import feign.RequestInterceptor;
+import feign.codec.ErrorDecoder;
 import org.springframework.context.annotation.Bean;
-import org.springframework.http.HttpHeaders;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Configuración propia de {@link CourierFeignClient}.
@@ -15,20 +12,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
  */
 public class CourierFeignConfig {
 
-    /**
-     * S2-06: courier-service exige JWT. Se propaga el token del usuario que originó la operación
-     * para no perder su identidad en la llamada interna. Fuera de un request HTTP (por ejemplo en un
-     * test unitario) no hay token y no se envía el header.
-     */
     @Bean
-    public RequestInterceptor propagarJwt() {
-        return plantilla -> {
-            if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes atributos) {
-                String token = atributos.getRequest().getHeader(HttpHeaders.AUTHORIZATION);
-                if (token != null) {
-                    plantilla.header(HttpHeaders.AUTHORIZATION, token);
-                }
-            }
-        };
+    public ErrorDecoder courierErrorDecoder() {
+        return new CourierErrorDecoder();
     }
 }
