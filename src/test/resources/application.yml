@@ -19,6 +19,11 @@ spring:
         type:
           preferred_uuid_jdbc_type: CHAR
 
+# Los tests no se registran ni consultan Eureka.
+eureka:
+  client:
+    enabled: false
+
 # URL de courier-service para los tests de contexto (los unitarios usan mocks).
 courier:
   service:
