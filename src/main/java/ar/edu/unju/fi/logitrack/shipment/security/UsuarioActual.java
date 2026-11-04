@@ -1,6 +1,5 @@
 package ar.edu.unju.fi.logitrack.shipment.security;
 
-import ar.edu.unju.fi.logitrack.common.security.Roles;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;

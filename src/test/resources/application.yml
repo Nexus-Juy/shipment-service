@@ -5,6 +5,9 @@ spring:
   cloud:
     config:
       enabled: false
+    openfeign:
+      circuitbreaker:
+        enabled: true
   datasource:
     url: jdbc:h2:mem:logitrack;MODE=MySQL;DB_CLOSE_DELAY=-1
     username: sa
@@ -19,10 +22,10 @@ spring:
         type:
           preferred_uuid_jdbc_type: CHAR
 
-# URL de courier-service para los tests de contexto (los unitarios usan mocks).
-courier:
-  service:
-    url: http://localhost:8082
+# Los tests no se registran ni consultan Eureka.
+eureka:
+  client:
+    enabled: false
 
 # Mismo secreto con el que los tests firman los JWT (ver JwtTestSupport).
 jwt:
