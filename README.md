@@ -7,7 +7,7 @@ Software, FI UNJu 2026). Ciclo de vida de envíos, historial de estados y asigna
 |---|---|
 | Lenguaje | Java 25 |
 | Framework | Spring Boot 4.0.9 · Spring Cloud 2025.1.1 |
-| Puerto | `8081` |
+| Puerto | `8081` (solo red interna) |
 | Base de datos | MySQL 8.4 (H2 en memoria para tests) |
 | Seguridad | JWT (HS256) emitido por `security-service` |
 | Comunicación entre servicios | Spring Cloud OpenFeign hacia `courier-service` (disponibilidad del repartidor) |
@@ -29,7 +29,7 @@ Software, FI UNJu 2026). Ciclo de vida de envíos, historial de estados y asigna
 ./mvnw spring-boot:run          # requiere configserver y MySQL levantados
 ```
 
-Swagger UI: http://localhost:8081/swagger-ui.html · Health: http://localhost:8081/actuator/health
+Swagger UI y health están disponibles solo al ejecutar el servicio desde el IDE (puerto `8081`). Desde la PC no se accede directo: en Docker este puerto no se publica y todo entra por el `api-gateway` (`http://localhost:8066`), que enruta por Eureka.
 
 ## Docker
 
